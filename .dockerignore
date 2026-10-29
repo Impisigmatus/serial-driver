@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+.vscode
+.reports
+build
+bin
+__debug_bin*
+autogen/tests
