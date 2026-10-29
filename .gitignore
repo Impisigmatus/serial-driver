@@ -1,0 +1,7 @@
+/vendor/
+/.vscode/
+/bin/
+/build/
+/service
+/serial-driver
+/*.exe
