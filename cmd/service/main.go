@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/Impisigmatus/serial-driver/internal/serial"
 	logger "github.com/Impisigmatus/service_core/log"
 )
@@ -19,6 +23,26 @@ func main() {
 	}
 	defer port.Close()
 
-	log.Info().Msgf("Чтение %s на скорости %d бод", device, baud)
-	port.Read()
+	go func() {
+		log.Info().Msgf("Чтение %s на скорости %d бод", device, baud)
+		if err := port.Read(); err != nil {
+			log.Panic().Err(err).Msg("Invalid service starting")
+		}
+		log.Info().Msg("Service stopped")
+	}()
+	log.Info().Msg("Service started")
+
+	channel := make(chan os.Signal, 1)
+	signal.Notify(channel,
+		syscall.SIGABRT,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	<-channel
+
+	if err := port.Close(); err != nil {
+		log.Panic().Err(err).Msg("Invalid service stopping")
+	}
 }

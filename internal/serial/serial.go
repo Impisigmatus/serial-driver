@@ -2,22 +2,26 @@ package serial
 
 import (
 	"bufio"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"go.bug.st/serial"
 )
 
 type SerialPort struct {
-	port        serial.Port
-	device      string
-	baud        int
+	port   serial.Port
+	device string
+	baud   int
+
 	lastMessage string
+	mu          *sync.RWMutex
 }
 
 func NewSerialPort(device string, baud int) *SerialPort {
 	return &SerialPort{
 		device: device,
 		baud:   baud,
+		mu:     &sync.RWMutex{},
 	}
 }
 
@@ -35,13 +39,21 @@ func (sp *SerialPort) Close() error {
 	return sp.port.Close()
 }
 
-func (sp *SerialPort) Read() {
+func (sp *SerialPort) Read() error {
 	scanner := bufio.NewScanner(sp.port)
 	for scanner.Scan() {
-		log.Info().Msg(scanner.Text())
+		message := scanner.Text()
+		sp.mu.Lock()
+		sp.lastMessage = message
+		sp.mu.Unlock()
+		log.Info().Msg(message)
 	}
+	return scanner.Err()
+}
 
-	if err := scanner.Err(); err != nil {
-		log.Panic().Err(err).Msgf("Ошибка чтения %s: %v", sp.device, err)
-	}
+func (sp *SerialPort) GetLastMessage() string {
+	sp.mu.RLock()
+	message := sp.lastMessage
+	sp.mu.RUnlock()
+	return message
 }
