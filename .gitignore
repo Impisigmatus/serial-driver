@@ -1,7 +1,11 @@
 /vendor/
+/.env
+/.reports/
+/autogen/
 /.vscode/
 /bin/
 /build/
 /service
 /serial-driver
 /*.exe
+__debug_bin*

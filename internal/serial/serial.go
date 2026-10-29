@@ -25,6 +25,10 @@ func NewSerialPort(device string, baud int) *SerialPort {
 	}
 }
 
+func (sp *SerialPort) SetDevice(device string) {
+	sp.device = device
+}
+
 func (sp *SerialPort) Open() error {
 	var err error
 	sp.port, err = serial.Open(sp.device, &serial.Mode{BaudRate: sp.baud})
