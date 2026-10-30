@@ -1,41 +1,86 @@
+// Этот тестовый файл сгенерирован автоматически.
 package transport
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/Impisigmatus/serial-driver/internal/serial"
 	"github.com/Impisigmatus/service_core/log"
+	"github.com/rs/zerolog"
 )
 
-type stubReader struct{ message string }
+type failingBody struct{}
 
-func (r stubReader) GetLastMessage() string { return r.message }
+func (failingBody) Read([]byte) (int, error) { return 0, errors.New("body read failed") }
 
-func TestGetApiSerialLatest(t *testing.T) {
+func TestPostApiSerialCommand(t *testing.T) {
 	for _, tc := range []struct {
-		name, message string
-		wantStatus    int
+		name       string
+		body       io.Reader
+		noLogger   bool
+		wantStatus int
+		wantBody   string
 	}{
-		{"no message", "", http.StatusServiceUnavailable},
-		{"latest message", "Привет из Arduino!", http.StatusOK},
+		{name: "invalid JSON", body: strings.NewReader(`{`), wantStatus: http.StatusBadRequest, wantBody: "Некорректный JSON-запрос\n"},
+		{name: "empty body", body: strings.NewReader(""), wantStatus: http.StatusBadRequest, wantBody: "Некорректный JSON-запрос\n"},
+		{name: "invalid data type", body: strings.NewReader(`{"data":42}`), wantStatus: http.StatusBadRequest, wantBody: "Некорректный JSON-запрос\n"},
+		{name: "body too large", body: strings.NewReader(strings.Repeat("x", (1<<20)+1)), wantStatus: http.StatusBadRequest, wantBody: "Некорректный JSON-запрос\n"},
+		{name: "body read failure", body: failingBody{}, wantStatus: http.StatusBadRequest, wantBody: "Некорректный JSON-запрос\n"},
+		{name: "port not open", body: strings.NewReader(`{"data":"RELEASE"}`), wantStatus: http.StatusInternalServerError, wantBody: "Не удалось выполнить команду микроконтроллера\n"},
+		{name: "missing logger", body: strings.NewReader(`{"data":"RELEASE"}`), noLogger: true, wantStatus: http.StatusInternalServerError, wantBody: "Невалидный логгер\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			logger := zerolog.New(&logs)
+			request := httptest.NewRequest(http.MethodPost, "/api/serial/command", tc.body)
+			if !tc.noLogger {
+				request = request.WithContext(context.WithValue(request.Context(), log.CtxKey, logger))
+			}
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodGet, "/api/serial/latest", nil)
-			request = request.WithContext(context.WithValue(request.Context(), log.CtxKey, log.New(log.LevelInfo)))
-			New(stubReader{tc.message}).GetApiSerialLatest(recorder, request)
+			New(serial.NewSerialPort(logger, 9600)).PostApiSerialCommand(recorder, request)
 			if recorder.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", recorder.Code, tc.wantStatus)
 			}
-			if tc.wantStatus == http.StatusOK {
-				if got := recorder.Body.String(); got != tc.message {
-					t.Fatalf("message = %q, want %q", got, tc.message)
-				}
-				if got := recorder.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
-					t.Fatalf("Content-Type = %q", got)
-				}
+			if got := recorder.Body.String(); got != tc.wantBody {
+				t.Fatalf("body = %q, want %q", got, tc.wantBody)
+			}
+			if tc.name == "port not open" && !strings.Contains(logs.String(), "serial port is not open") {
+				t.Fatalf("serial error missing from log: %s", logs.String())
+			}
+		})
+	}
+}
+
+func TestGetApiSerialLatest(t *testing.T) {
+	for _, withLogger := range []bool{true, false} {
+		name := "missing logger"
+		if withLogger {
+			name = "placeholder"
+		}
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/serial/latest", nil)
+			wantStatus, wantBody := http.StatusInternalServerError, "Невалидный логгер\n"
+			if withLogger {
+				request = request.WithContext(context.WithValue(request.Context(), log.CtxKey, zerolog.Nop()))
+				wantStatus, wantBody = http.StatusOK, "Не реализовано"
+			}
+			recorder := httptest.NewRecorder()
+			New(serial.NewSerialPort(zerolog.Nop(), 9600)).GetApiSerialLatest(recorder, request)
+			if recorder.Code != wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, wantStatus)
+			}
+			if got := recorder.Body.String(); got != wantBody {
+				t.Fatalf("body = %q, want %q", got, wantBody)
+			}
+			if got := recorder.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+				t.Fatalf("Content-Type = %q", got)
 			}
 		})
 	}

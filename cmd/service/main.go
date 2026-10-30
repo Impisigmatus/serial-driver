@@ -35,7 +35,7 @@ func main() {
 	}
 
 	logger = log.New(cfg.LogLevel)
-	port := serial.NewSerialPort("", cfg.BaudRate)
+	port := serial.NewSerialPort(logger, cfg.BaudRate)
 	httpServer := &http.Server{Addr: cfg.Port, Handler: getRouter(logger, cfg.SpecPath, port)}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
