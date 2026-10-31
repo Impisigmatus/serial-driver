@@ -75,28 +75,3 @@ func (t *Transport) PostApiSerialCommand(w http.ResponseWriter, r *http.Request)
 		log.Error().Err(err).Msg("Не удалось записать ответ")
 	}
 }
-
-// GetApiSerialLatest godoc
-//
-// @Router /api/serial/latest [get]
-// @Summary Последнее сообщение последовательного порта
-// @Description Возвращает последнюю полную строку, полученную от устройства.
-// @Produce plain
-//
-// @Tags Serial
-//
-// @Success 200 {string} string "Последнее сообщение"
-// @Failure 500 {string} string "Невалидный логгер"
-// @Failure 503 {string} string "Сообщение ещё не получено"
-func (t *Transport) GetApiSerialLatest(w http.ResponseWriter, r *http.Request) {
-	log, ok := r.Context().Value(log.CtxKey).(zerolog.Logger)
-	if !ok {
-		http.Error(w, "Невалидный логгер", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if _, err := w.Write([]byte("Не реализовано")); err != nil {
-		log.Error().Err(err).Msg("Не удалось записать ответ")
-	}
-}

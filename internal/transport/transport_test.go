@@ -57,31 +57,3 @@ func TestPostApiSerialCommand(t *testing.T) {
 		})
 	}
 }
-
-func TestGetApiSerialLatest(t *testing.T) {
-	for _, withLogger := range []bool{true, false} {
-		name := "missing logger"
-		if withLogger {
-			name = "placeholder"
-		}
-		t.Run(name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodGet, "/api/serial/latest", nil)
-			wantStatus, wantBody := http.StatusInternalServerError, "Невалидный логгер\n"
-			if withLogger {
-				request = request.WithContext(context.WithValue(request.Context(), log.CtxKey, zerolog.Nop()))
-				wantStatus, wantBody = http.StatusOK, "Не реализовано"
-			}
-			recorder := httptest.NewRecorder()
-			New(serial.NewSerialPort(zerolog.Nop(), 9600)).GetApiSerialLatest(recorder, request)
-			if recorder.Code != wantStatus {
-				t.Fatalf("status = %d, want %d", recorder.Code, wantStatus)
-			}
-			if got := recorder.Body.String(); got != wantBody {
-				t.Fatalf("body = %q, want %q", got, wantBody)
-			}
-			if got := recorder.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
-				t.Fatalf("Content-Type = %q", got)
-			}
-		})
-	}
-}
